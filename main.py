@@ -30,12 +30,12 @@ def push_to_feishu(data):
     headers = {"Authorization": f"Bearer {token}"}
     url = FEISHU_API.format(app_token=config["app_token"], table_id=config["table_id"])
     
-    records = [{"fields": {
-        "股票代码": row["代码"],
-        "股票名称": row["名称"],
-        "涨停价格": row["最新价"],
-        "涨停日期": datetime.now().strftime("%Y%m%d"),
-    }} for _, row in data.iterrows()]
+records = [{"fields": {
+    "股票代码": str(row["代码"]),
+    "股票名称": str(row["名称"]),
+    "涨停价格": float(row["最新价"]),
+    "涨停日期": datetime.now().strftime("%Y-%m-%d")
+}} for _, row in data.iterrows()]
     
     # 分批写入
     for i in range(0, len(records), 100):
