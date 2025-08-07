@@ -1,16 +1,15 @@
 import os
 import requests
 import pandas as pd
-import tushare as ts
+import akshare as ak
 from datetime import datetime
 
-# 飞书接口配置
+# 飞书配置
 FEISHU_API = "https://open.feishu.cn/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records"
 TOKEN_API = "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"
 
-# 从环境变量获取参数
+# 环境变量
 config = {
-    "tushare_token": os.getenv('TUSHARE_TOKEN'),
     "app_id": os.getenv('FEISHU_APP_ID'),
     "app_secret": os.getenv('FEISHU_APP_SECRET'),
     "app_token": os.getenv('FEISHU_APP_TOKEN'),
@@ -18,7 +17,7 @@ config = {
 }
 
 def get_feishu_token():
-    """获取飞书访问令牌"""
+    """获取飞书token"""
     res = requests.post(TOKEN_API, json={
         "app_id": config["app_id"],
         "app_secret": config["app_secret"]
@@ -26,39 +25,48 @@ def get_feishu_token():
     return res.json().get('tenant_access_token')
 
 def push_to_feishu(data):
-    """推送数据到飞书多维表格"""
+    """推送数据到飞书"""
     token = get_feishu_token()
     headers = {"Authorization": f"Bearer {token}"}
     url = FEISHU_API.format(app_token=config["app_token"], table_id=config["table_id"])
     
-    # 构建飞书数据格式
     records = [{"fields": {
-        "股票代码": f'{row["ts_code"][:6]}',
-        "股票名称": row["name"],
-        "涨停价格": row["close"],
-        "涨停日期": row["trade_date"]
+        "股票代码": row["代码"],
+        "股票名称": row["名称"],
+        "涨停价格": row["最新价"],
+        "涨停日期": datetime.now().strftime("%Y%m%d"),
+        "涨幅%": round(row["涨跌幅"], 2),
+        "行业": row.get("所属行业", "未知"),
+        "涨停原因": row.get("涨停原因", "常规涨停")
     }} for _, row in data.iterrows()]
     
-    # 分批写入（飞书单次上限100条）
+    # 分批写入
     for i in range(0, len(records), 100):
         res = requests.post(url, headers=headers, json={"records": records[i:i+100]})
-        print(f"推送状态: {res.status_code}, 响应: {res.text}")
+        print(f"推送状态: {res.status_code}")
 
 def main():
-    """主函数：获取涨停股并推送到飞书"""
-    # 设置tushare
-    ts.set_token(config["tushare_token"])
-    pro = ts.pro_api()
-    
-    # 获取当日涨停股
-    today = datetime.now().strftime("%Y%m%d")
-    df = pro.limit_list(trade_date=today, limit_type='U', fields='ts_code,name,close,trade_date')
-    
-    if not df.empty:
-        push_to_feishu(df)
-        print(f"成功推送 {len(df)} 条涨停数据")
-    else:
-        print("今日无涨停股票数据")
+    # 使用AkShare获取涨停股数据
+    try:
+        # 东方财富涨停板数据
+        df = ak.stock_zt_pool_em(date=datetime.now().strftime("%Y%m%d"))
+        
+        if not df.empty:
+            print(f"获取到 {len(df)} 只涨停股")
+            push_to_feishu(df)
+        else:
+            print("今日无涨停股票")
+    except Exception as e:
+        print(f"数据获取异常: {e}")
+        # 备选数据源：新浪财经
+        try:
+            df = ak.stock_zh_a_spot_em()
+            # 筛选涨幅≥9.5%的股票
+            df = df[df["涨跌幅"] >= 9.5]
+            print(f"从新浪获取到 {len(df)} 只涨停股")
+            push_to_feishu(df)
+        except Exception as e2:
+            print(f"备选数据源异常: {e2}")
 
 if __name__ == "__main__":
     main()
