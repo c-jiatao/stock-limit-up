@@ -1,4 +1,4 @@
-name: 每日涨停股票同步
+name: Daily Sync of Limit-Up Stocks
 
 on:
   workflow_dispatch:
