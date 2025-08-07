@@ -35,9 +35,6 @@ def push_to_feishu(data):
         "股票名称": row["名称"],
         "涨停价格": row["最新价"],
         "涨停日期": datetime.now().strftime("%Y%m%d"),
-        "涨幅%": round(row["涨跌幅"], 2),
-        "行业": row.get("所属行业", "未知"),
-        "涨停原因": row.get("涨停原因", "常规涨停")
     }} for _, row in data.iterrows()]
     
     # 分批写入
